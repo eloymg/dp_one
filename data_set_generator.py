@@ -46,7 +46,7 @@ params = (
     ('method', 'flickr.photos.search'),
     ('license', '9'),
     ('text', 'dog'),
-    ('api_key', '8d1a17fd31157d62322d4599c7247bf8'),
+    ('api_key', ''),
     ('extras', 'license,url_s'),
     ('format', 'json'),
     ('nojsoncallback','1'),
