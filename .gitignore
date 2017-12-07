@@ -1,2 +1,5 @@
 *.txt
 images/
+images_2/
+experiments/
+tests/

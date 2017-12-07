@@ -3,14 +3,26 @@ import numpy as np
 import scipy.misc
 from PIL import Image
 import requests
+import datetime
+import time
+import os
+import matplotlib.pyplot as plt
+import math
+from random import shuffle
+import argparse
+
+parser = argparse.ArgumentParser(description='Process some integers.')
 
 
-def cnn_model_fn(features, labels):
+
+#vector or processed
+MODEL = "classic"
+MODE = "train"
+
+def classic_model(features, labels):
     """Model function for CNN."""
     # Input Layer
-    #input_layer = tf.reshape(features["x"], [-1, 64, 64, 1])
-    input_layer = tf.reshape(features, [-1, 64, 64, 1])
-
+    input_layer = tf.reshape(features, [-1 ,64,64,1])
     # Convolutional Layer #1
     conv1 = tf.layers.conv2d(
         inputs=input_layer,
@@ -23,8 +35,8 @@ def cnn_model_fn(features, labels):
     conv2 = tf.layers.conv2d(
         inputs=conv1,
         filters=32,
-        kernel_size=[11, 11],
         padding="same",
+        kernel_size=[11, 11],
         activation=tf.nn.relu)
 
     # Convolutional Layer #3
@@ -34,31 +46,216 @@ def cnn_model_fn(features, labels):
         kernel_size=[11, 11],
         padding="same",
         activation=tf.nn.relu)
+    return output 
 
-    #if mode == tf.estimator.ModeKeys.PREDICT:
-    #  return tf.estimator.EstimatorSpec(mode=mode, predictions=output)
-    # Calculate Loss (for both TRAIN and EVAL modes)
+def vector_model(features,labels):
+    # Input Layer
+   
+    input_layer = tf.reshape(features, [-1 ,64,64,1])
+    
+    # Convolutional Layer #1
+    conv1 = tf.layers.conv2d(
+        inputs=input_layer,
+        filters=128,
+        kernel_size=[11, 11],
+        padding="same",
+        activation=tf.nn.relu)
+
+    conv2 = tf.layers.conv2d(
+        inputs=conv1,
+        filters=64,
+        kernel_size=[11, 11],
+        padding="same",
+        activation=tf.nn.relu)
+
+    # Convolutional Layer #2
+    conv3 = tf.layers.conv2d(
+        inputs=conv2,
+        filters=64,
+        kernel_size=[5, 5],
+        padding="same",
+        activation=tf.nn.relu)
+
+    # Convolutional Layer #3
+    output = tf.layers.conv2d(
+        inputs=conv3,
+        filters=1,
+        kernel_size=[11, 11],
+        padding="same",
+        activation=tf.nn.relu)
+    
+    return output
+
+def test_model(features, labels):
+
+    if MODEL == "vector":
+        output=vector_model(features,labels)
+    elif MODEL == "classic":
+        output=classic_model(features,labels)
+    loss=tf.abs(tf_ssim(labels, output)-1.0)
+    
+    
+
+    return output,loss
+
+def train_model(features, labels):
+    
+    if MODEL == "vector":
+        output=vector_model(features,labels)
+    elif MODEL == "classic":
+        output=classic_model(features,labels)
+
+    """
     loss = tf.losses.mean_squared_error(labels, output)
-
-    # Configure the Training Op (for TRAIN mode)
-    # if mode == tf.estimator.ModeKeys.TRAIN:
-    #if mode == "train":
-    optimizer = tf.train.GradientDescentOptimizer(learning_rate=0.001)
+   
+    loss=tf.abs(tf_ssim(labels, output)-1.0)
+    """
+    loss = tf.losses.mean_squared_error(labels, output)*tf.abs(tf_ssim(labels, output)-1.0)
+    global_step = tf.Variable(0, trainable=False)
+    learning_rate = tf.train.exponential_decay(0.000008,global_step,
+                                           100000, 0.01, staircase=True)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
     train_op = optimizer.minimize(
-        loss=loss, global_step=tf.train.get_global_step())
-    #return tf.estimator.EstimatorSpec(mode=mode, loss=loss, train_op=train_op)
+        loss=loss)
+    
+    tf.summary.scalar("learning_rate", learning_rate)
 
-    # Add evaluation metrics (for EVAL mode)
-    #eval_metric_ops = {
-    #   "accuracy": tf.metrics.accuracy(
-    #      labels=labels, predictions=predictions["classes"])}
-    #return tf.estimator.EstimatorSpec(
-    #   mode=mode, loss=loss, eval_metric_ops=eval_metric_ops)
+    lossG=tf.abs(tf_ssim(labels, output)-1.0)
 
-    return train_op, loss
+    return train_op, lossG, output,labels
+
+def main(argunused):
+    if MODE == 'train':
+        ts = time.time()
+        st = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y_%H.%M.%S')
+        experiment_dir = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\" + st+"\\"
+        #data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\experiment(10000)\\model-6259000.ckpt"
+        
+        r_input = tf.placeholder(tf.float32, None)
+        labels = tf.placeholder(tf.float32, None)
+     
+        train_op, loss,out,original = train_model(r_input, labels)
+       
+        saver = tf.train.Saver()
+        tf.summary.scalar("loss", loss)
+        tf.summary.image("input",r_input)
+        tf.summary.image("original",original)
+        tf.summary.image("reconstructed",out)
+       
+        summary_op = tf.summary.merge_all()
+
+        with tf.Session() as sess:
+            #saver.restore(sess,data_path)
+            writer = tf.summary.FileWriter(experiment_dir, sess.graph)
+            sess.run(tf.global_variables_initializer())
+            ge = 0
+            for i in range(0,1):
+                i = 0
+                j = 0
+                x = list(range(0,52))
+                shuffle(x)
+                batch_size=1
+                while (i < (256/batch_size)*52):
+                    jj = x[j]
+                    if MODEL=="vector":
+                        r = np.load("images_2/res_1000_" + str(jj) + ".npy")
+                    elif MODEL=="classic":
+                        r = np.load("images_2/res_410_" + str(jj) + ".npy")
+                    l = np.load("images_2/im_" + str(jj) + ".npy")
+                    x2 = list(range(0,int(256/batch_size)))
+                    shuffle(x2)
+                    for k in x2:
+                        if MODEL == "vector":
+                            rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                        if MODEL == "classic":
+                            rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                        lp = l[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                        _, loss_value, summary,output = sess.run(
+                            [train_op, loss, summary_op,out],
+                            feed_dict={
+                                r_input: rp,
+                                labels: lp
+                            })
+                        if i % 30 == 0 and i != 0:
+                            writer.add_summary(summary, global_step=ge)
+                            saver.save(sess, experiment_dir + "model-" + str(i) + ".ckpt")
+                            print("LOSS:" + str(loss_value))
+                        i = i + 1
+                        ge = ge+1
+                    j = j+1
+                
+                
+    elif MODE == "test":
+        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+        data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\06-12-2017_11.02.11\\model-13290.ckpt"
+        
+        r_input = tf.placeholder(tf.float32, None)
+        labels = tf.placeholder(tf.float32, None)
+        out,loss = test_model(r_input, labels)
+        saver = tf.train.Saver()
+        
+        rT = np.load("images_2/res_1000_" + str(0) + ".npy") 
+        lT = np.load("images_2/im_" + str(0) + ".npy")
+        rpT = rT[0:10,:,:]
+        lpT = lT[0:10,:,:,:]
+
+        r = np.load("images_2/res_1000_" + str(54) + ".npy") 
+        l = np.load("images_2/im_" + str(54) + ".npy")
+        rp = r[0:255,:,:]
+        lp = l[0:255,:,:,:]
+        with tf.Session() as sess:
+    
+            saver.restore(sess,data_path)
+            outputT, loss_value, = sess.run(
+                        [out, loss],
+                        feed_dict={
+                            r_input: rpT,
+                            labels: lpT
+                        })
+            print(loss_value)
+            output, loss_value, = sess.run(
+                        [out, loss],
+                        feed_dict={
+                            r_input: rp,
+                            labels: lp
+                        })
+            print(loss_value)
+            plt.subplot(4,2,1)
+            plt.imshow(lpT[0,:,:,0],"gray")      
+            plt.subplot(4,2,2)
+            plt.imshow(outputT[0,:,:,0],"gray")
+            plt.subplot(4,2,3)           
+            plt.imshow(lp[1,:,:,0],"gray")
+            plt.subplot(4,2,4)      
+            plt.imshow(output[1,:,:,0],"gray")
+            plt.subplot(4,2,5)           
+            plt.imshow(lp[2,:,:,0],"gray")
+            plt.subplot(4,2,6)      
+            plt.imshow(output[2,:,:,0],"gray")
+            plt.subplot(4,2,7)           
+            plt.imshow(lp[10,:,:,0],"gray")
+            plt.subplot(4,2,8)      
+            plt.imshow(output[10,:,:,0],"gray")
+            plt.show()
+            
+def _tf_fspecial_gauss(size, sigma):
+    """Function to mimic the 'fspecial' gaussian MATLAB function
+    """
+    x_data, y_data = np.mgrid[-size//2 + 1:size//2 + 1, -size//2 + 1:size//2 + 1]
+
+    x_data = np.expand_dims(x_data, axis=-1)
+    x_data = np.expand_dims(x_data, axis=-1)
+
+    y_data = np.expand_dims(y_data, axis=-1)
+    y_data = np.expand_dims(y_data, axis=-1)
+
+    x = tf.constant(x_data, dtype=tf.float32)
+    y = tf.constant(y_data, dtype=tf.float32)
+
+    g = tf.exp(-((x**2 + y**2)/(2.0*sigma**2)))
+    return g / tf.reduce_sum(g)
 
 
-"""
 def tf_ssim(img1, img2, cs_map=False, mean_metric=True, size=11, sigma=1.5):
     window = _tf_fspecial_gauss(size, sigma) # window shape [size, size]
     K1 = 0.01
@@ -85,96 +282,44 @@ def tf_ssim(img1, img2, cs_map=False, mean_metric=True, size=11, sigma=1.5):
     if mean_metric:
         value = tf.reduce_mean(value)
     return value
-"""
 
 
-def main(argunused):
-    """
-    Arguments:
-        raw_input numpy tensor of size dim x dim 
+def tf_ms_ssim(img1, img2, mean_metric=True, level=5):
+    weight = tf.constant([0.0448, 0.2856, 0.3001, 0.2363, 0.1333], dtype=tf.float32)
+    mssim = []
+    mcs = []
+    for l in range(level):
+        ssim_map, cs_map = tf_ssim(img1, img2, cs_map=True, mean_metric=False)
+        mssim.append(tf.reduce_mean(ssim_map))
+        mcs.append(tf.reduce_mean(cs_map))
+        filtered_im1 = tf.nn.avg_pool(img1, [1,2,2,1], [1,2,2,1], padding='SAME')
+        filtered_im2 = tf.nn.avg_pool(img2, [1,2,2,1], [1,2,2,1], padding='SAME')
+        img1 = filtered_im1
+        img2 = filtered_im2
 
-    """
-    fh = open("fall11_urls.txt")
-    #r_input,labels = generate_batch(1,fh,masks_vector,matrix_vector)
-    r_input = tf.placeholder(tf.float32, None)
-    labels = tf.placeholder(tf.float32,None)
-    train_op, loss = cnn_model_fn(r_input, labels)
+    # list to tensor of dim D+1
+    mssim = tf.pack(mssim, axis=0)
+    mcs = tf.pack(mcs, axis=0)
 
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        i = 0
-        while (i < 100):
-            r, l = generate_batch(200, fh)
-            _, loss_value = sess.run(
-                [train_op, loss], feed_dict={
-                    r_input: r,
-                    labels: l
-                })
-            print("LOSS:" + str(loss_value))
-            i = i + 1
+    value = (tf.reduce_prod(mcs[0:level-1]**weight[0:level-1])*
+                            (mssim[level-1]**weight[level-1]))
 
+    if mean_metric:
+        value = tf.reduce_mean(value)
+    return value
 
-#     # Create the Estimator
-#     classifier = tf.estimator.Estimator(
-#       model_fn=cnn_model_fn, model_dir="C:/tmp/test_convnet_model")
+def psnr(target, ref, scale):
+	#assume RGB image
+	target_data = np.array(target)
+	target_data = target_data[scale:-scale, scale:-scale]
 
-#   # Train the model
-#     train_input_fn = tf.estimator.inputs.numpy_input_fn(
-#         x={"x": expanded_input},
-#         y=labels,
-#         batch_size=1,
-#         num_epochs=5,
-#         shuffle=True)
-#     classifier.train(input_fn=train_input_fn, steps=100)
-
-global matrix_vector
-global masks_vector
-
-
-def generate_batch(batch_size, fh):
-    batch_im = np.zeros([batch_size, 64, 64, 1], dtype="float32")
-    batch_res = np.zeros([batch_size, 64, 64, 1], dtype="float32")
-    try:
-        matrix_vector
-        masks_vector
-    except:
-        matrix_vector = []
-        masks_vector = []
-        np.random.seed(1)
-        for _ in range(0, 1000):
-            random_matrix = (np.random.rand(64, 64) < 0.5) * np.float32(1)
-            masks_vector.append(random_matrix)
-            matrix_vector.append(random_matrix.flatten())
-    for i in range(0, batch_size):
-        intensity_vector = []
-        im = []
-        res = []
-        count = 0
-        while len(im) == 0 and len(res) == 0:
-            url = fh.readline().split()[1]
-            try:
-                im = np.asarray(
-                    Image.open(
-                        requests.get(url, stream=True, timeout=0.5).raw))
-                im = scipy.misc.imresize(im, (64, 64))[:, :, 0]
-                print(i)
-            except:
-                im = []
-                res = []
-                continue
-            for j in masks_vector:
-                intensity_vector.append(np.sum(j * im))
-            im = im.astype('float32')
-
-            res = np.reshape(
-                np.matmul(intensity_vector, matrix_vector), (64, 64))
-            count += 1
-        batch_im[i, :, :, 0] = im
-        batch_im = batch_im.astype('float32')
-        batch_res[i, :, :, 0] = res
-        batch_res = batch_res.astype('float32')
-    return batch_im, batch_res
-
+	ref_data = np.array(ref)
+	ref_data = ref_data[scale:-scale, scale:-scale]
+	
+	diff = ref_data - target_data
+	diff = diff.flatten('C')
+	rmse = math.sqrt( np.mean(diff ** 2.) )
+	return 20*math.log10(1.0/rmse)
 
 if __name__ == "__main__":
     tf.app.run()
