@@ -1,5 +1,6 @@
 *.txt
 images/
 images_2/
+images_qr/
 experiments/
 tests/

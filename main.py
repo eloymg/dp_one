@@ -16,8 +16,8 @@ parser = argparse.ArgumentParser(description='Process some integers.')
 
 
 #vector or processed
-MODEL = "classic"
-MODE = "train"
+MODEL = "qr"
+MODE = "test"
 
 def classic_model(features, labels):
     """Model function for CNN."""
@@ -48,6 +48,35 @@ def classic_model(features, labels):
         activation=tf.nn.relu)
     return output 
 
+def qr_model(features, labels):
+    """Model function for CNN."""
+    # Input Layer
+    input_layer = tf.reshape(features, [-1 ,63,63,1])
+    # Convolutional Layer #1
+    conv1 = tf.layers.conv2d(
+        inputs=input_layer,
+        filters=63,
+        kernel_size=[11, 11],
+        padding="same",
+        activation=tf.nn.relu)
+
+    # Convolutional Layer #2
+    conv2 = tf.layers.conv2d(
+        inputs=conv1,
+        filters=32,
+        padding="same",
+        kernel_size=[11, 11],
+        activation=tf.nn.relu)
+
+    # Convolutional Layer #3
+    output = tf.layers.conv2d(
+        inputs=conv2,
+        filters=1,
+        kernel_size=[11, 11],
+        padding="same",
+        activation=tf.nn.relu)
+    return output 
+
 def vector_model(features,labels):
     # Input Layer
    
@@ -56,14 +85,14 @@ def vector_model(features,labels):
     # Convolutional Layer #1
     conv1 = tf.layers.conv2d(
         inputs=input_layer,
-        filters=128,
+        filters=64,
         kernel_size=[11, 11],
         padding="same",
         activation=tf.nn.relu)
 
     conv2 = tf.layers.conv2d(
         inputs=conv1,
-        filters=64,
+        filters=32,
         kernel_size=[11, 11],
         padding="same",
         activation=tf.nn.relu)
@@ -71,8 +100,8 @@ def vector_model(features,labels):
     # Convolutional Layer #2
     conv3 = tf.layers.conv2d(
         inputs=conv2,
-        filters=64,
-        kernel_size=[5, 5],
+        filters=16,
+        kernel_size=[11, 11],
         padding="same",
         activation=tf.nn.relu)
 
@@ -92,6 +121,8 @@ def test_model(features, labels):
         output=vector_model(features,labels)
     elif MODEL == "classic":
         output=classic_model(features,labels)
+    elif MODEL == "qr":
+        output=qr_model(features,labels)
     loss=tf.abs(tf_ssim(labels, output)-1.0)
     
     
@@ -104,16 +135,18 @@ def train_model(features, labels):
         output=vector_model(features,labels)
     elif MODEL == "classic":
         output=classic_model(features,labels)
-
-    """
+    elif MODEL == "qr":
+        output=qr_model(features,labels)
+    
     loss = tf.losses.mean_squared_error(labels, output)
-   
-    loss=tf.abs(tf_ssim(labels, output)-1.0)
     """
-    loss = tf.losses.mean_squared_error(labels, output)*tf.abs(tf_ssim(labels, output)-1.0)
+    loss=tf.abs(tf_ssim(labels, output)-1.0)
+    
+    loss = 0.001*tf.losses.mean_squared_error(labels, output) + 100*tf.abs(tf_ssim(labels, output)-1.0)
+    """
     global_step = tf.Variable(0, trainable=False)
     learning_rate = tf.train.exponential_decay(0.000008,global_step,
-                                           100000, 0.01, staircase=True)
+                                           1000, 0.96, staircase=True)
     optimizer = tf.train.AdamOptimizer(learning_rate)
     train_op = optimizer.minimize(
         loss=loss)
@@ -152,22 +185,29 @@ def main(argunused):
             for i in range(0,1):
                 i = 0
                 j = 0
-                x = list(range(0,52))
+                x = list(range(0,2700))
                 shuffle(x)
                 batch_size=1
-                while (i < (256/batch_size)*52):
+                while (i < (256/batch_size)*2700):
                     jj = x[j]
                     if MODEL=="vector":
                         r = np.load("images_2/res_1000_" + str(jj) + ".npy")
+                        l = np.load("images_2/im_" + str(jj) + ".npy")
                     elif MODEL=="classic":
-                        r = np.load("images_2/res_410_" + str(jj) + ".npy")
-                    l = np.load("images_2/im_" + str(jj) + ".npy")
+                        r = np.load("images_2/res_1000_" + str(jj) + ".npy")
+                        l = np.load("images_2/im_" + str(jj) + ".npy")
+                    elif MODEL=="qr":
+                        r = np.load("images_qr/res_1000_" + str(jj) + ".npy")
+                        l = np.load("images_qr/im_63_" + str(jj) + ".npy")
+                    
                     x2 = list(range(0,int(256/batch_size)))
                     shuffle(x2)
                     for k in x2:
                         if MODEL == "vector":
                             rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
-                        if MODEL == "classic":
+                        elif MODEL == "classic":
+                            rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                        elif MODEL == "qr":
                             rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
                         lp = l[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
                         _, loss_value, summary,output = sess.run(
@@ -187,22 +227,27 @@ def main(argunused):
                 
     elif MODE == "test":
         os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-        data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\06-12-2017_11.02.11\\model-13290.ckpt"
+        data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\13-12-2017_13.05.05\\model-179850.ckpt"
         
         r_input = tf.placeholder(tf.float32, None)
         labels = tf.placeholder(tf.float32, None)
         out,loss = test_model(r_input, labels)
         saver = tf.train.Saver()
-        
-        rT = np.load("images_2/res_1000_" + str(0) + ".npy") 
-        lT = np.load("images_2/im_" + str(0) + ".npy")
-        rpT = rT[0:10,:,:]
-        lpT = lT[0:10,:,:,:]
 
-        r = np.load("images_2/res_1000_" + str(54) + ".npy") 
-        l = np.load("images_2/im_" + str(54) + ".npy")
-        rp = r[0:255,:,:]
-        lp = l[0:255,:,:,:]
+        if MODEL=="vector":
+            print(1)
+        elif MODEL == "classic":
+            print(2)
+        elif MODEL == "qr":
+            rT = np.load("images_qr/res_1000_" + str(0) + ".npy") 
+            lT = np.load("images_qr/im_63_" + str(0) + ".npy")
+            rpT = rT[0:10,:,:,:]
+            lpT = lT[0:10,:,:,:]
+
+            r = np.load("images_qr/res_1000_" + str(2800) + ".npy") 
+            l = np.load("images_qr/im_63_" + str(2800) + ".npy")
+            rp = r[0:255,:,:,:]
+            lp = l[0:255,:,:,:]
         with tf.Session() as sess:
     
             saver.restore(sess,data_path)
