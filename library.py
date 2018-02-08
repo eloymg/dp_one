@@ -11,7 +11,8 @@ import math
 from random import shuffle
 import argparse
 import sys
-
+from skimage.measure import compare_ssim as ssim
+import main2
 parser = argparse.ArgumentParser(description='Process some integers.')
 
 
@@ -126,8 +127,8 @@ def test_model(features):
         output=qr_model(features)
     return output
 
-def main(img):        
-        data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\13-12-2017_13.05.05\\model-179850.ckpt"
+def main(img,per):        
+        data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\experiment("+str(per)+")\\model-"+str(per)+"-2550.ckpt"
         nx,ny=img.shape
         r_input = tf.placeholder(tf.float32, None)
         out = test_model(r_input)
@@ -136,19 +137,16 @@ def main(img):
         masks_vector = []
         intensity_vector = []
         np.random.seed(1)
-        for _ in range(0, 1000):
+        for _ in range(0, int(per*64*64)):
             random_matrix = (np.random.rand(nx, ny) < 0.5) * np.float32(1)
             masks_vector.append(random_matrix)
             matrix_vector.append(random_matrix.flatten())
         Tmatrix_vector=np.linalg.pinv(np.matrix(matrix_vector))
         for j in masks_vector:
             intensity_vector.append(np.sum(j * img))
-        plt.imshow(img)
-        plt.show()
         res = np.reshape(
         np.matmul(Tmatrix_vector,intensity_vector), (63, 63))
-        plt.imshow(res)
-        plt.show()
+
     
         with tf.Session() as sess:
             saver.restore(sess,data_path)
@@ -159,13 +157,14 @@ def main(img):
                         })
         
         return output
-def deepreconstruct(img):
-    output= main(img)
+def deepreconstruct(img,per):
+    output= main(img,per)
     return output
 if __name__ == "__main__":
  
-    img = plt.imread("C:\\Users\\eloy\\Desktop\\test2.png")
-    img = img.astype('float32')[:,:,0]
-    output = deepreconstruct(img)
-    plt.imshow(output[0][0,:,:,0],"gray")
-    plt.show()
+    i = main2.Image()
+    im = i.return_image(size=64).astype("uint8")
+    percent = np.arange(0.1, 1.1, 0.1)
+    for per in percent:
+        output = deepreconstruct(im,per)
+        print(ssim(im,output))

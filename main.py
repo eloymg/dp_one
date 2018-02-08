@@ -16,8 +16,8 @@ parser = argparse.ArgumentParser(description='Process some integers.')
 
 
 #vector or processed
-MODEL = "qr"
-MODE = "test"
+MODEL = "classic"
+MODE = "train"
 
 def classic_model(features, labels):
     """Model function for CNN."""
@@ -97,21 +97,16 @@ def vector_model(features,labels):
         padding="same",
         activation=tf.nn.relu)
 
-    # Convolutional Layer #2
+    # Convolutional Layer #3
     conv3 = tf.layers.conv2d(
         inputs=conv2,
-        filters=16,
-        kernel_size=[11, 11],
-        padding="same",
-        activation=tf.nn.relu)
-
-    # Convolutional Layer #3
-    output = tf.layers.conv2d(
-        inputs=conv3,
         filters=1,
         kernel_size=[11, 11],
         padding="same",
         activation=tf.nn.relu)
+    
+    output_f = tf.layers.dense(tf.layers.flatten(conv3),4096)
+    output = tf.reshape(output_f,[-1,64,64,1])
     
     return output
 
@@ -137,15 +132,15 @@ def train_model(features, labels):
         output=classic_model(features,labels)
     elif MODEL == "qr":
         output=qr_model(features,labels)
-    
+    """
     loss = tf.losses.mean_squared_error(labels, output)
-    """
-    loss=tf.abs(tf_ssim(labels, output)-1.0)
     
-    loss = 0.001*tf.losses.mean_squared_error(labels, output) + 100*tf.abs(tf_ssim(labels, output)-1.0)
+    loss=tf.abs(tf_ssim(labels, output)-1.0)
     """
+    loss = 0.0001*tf.losses.mean_squared_error(labels, output) + 100*tf.abs(tf_ssim(labels, output)-1.0)
+    
     global_step = tf.Variable(0, trainable=False)
-    learning_rate = tf.train.exponential_decay(0.000008,global_step,
+    learning_rate = tf.train.exponential_decay(0.00003,global_step,
                                            1000, 0.96, staircase=True)
     optimizer = tf.train.AdamOptimizer(learning_rate)
     train_op = optimizer.minimize(
@@ -157,132 +152,147 @@ def train_model(features, labels):
 
     return train_op, lossG, output,labels
 
-def main(argunused):
-    if MODE == 'train':
-        ts = time.time()
-        st = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y_%H.%M.%S')
-        experiment_dir = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\" + st+"\\"
-        #data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\experiment(10000)\\model-6259000.ckpt"
-        
-        r_input = tf.placeholder(tf.float32, None)
-        labels = tf.placeholder(tf.float32, None)
-     
-        train_op, loss,out,original = train_model(r_input, labels)
-       
-        saver = tf.train.Saver()
-        tf.summary.scalar("loss", loss)
-        tf.summary.image("input",r_input)
-        tf.summary.image("original",original)
-        tf.summary.image("reconstructed",out)
-       
-        summary_op = tf.summary.merge_all()
 
-        with tf.Session() as sess:
-            #saver.restore(sess,data_path)
-            writer = tf.summary.FileWriter(experiment_dir, sess.graph)
-            sess.run(tf.global_variables_initializer())
-            ge = 0
-            for i in range(0,1):
+def main(argunused):
+    
+    per = np.arange(0.1, 1.1, 0.1)
+    for percent in per:
+        print(percent)
+        if MODE == 'train':
+            #ts = time.time()
+            #st = datetime.datetime.fromtimestamp(ts).strftime('%d-%m-%Y_%H.%M.%S')
+            experiment_dir = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\" +"experiment("+str(percent)+")\\"
+            #data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\experiment(10000)\\model-6259000.ckpt"
+            tf.reset_default_graph()
+            r_input = tf.placeholder(tf.float32, None)
+            labels = tf.placeholder(tf.float32, None)
+        
+            train_op, loss,out,original = train_model(r_input, labels)
+        
+            saver = tf.train.Saver()
+            tf.summary.scalar("loss", loss)
+            tf.summary.image("input",r_input)
+            tf.summary.image("original",original)
+            tf.summary.image("reconstructed",out)
+        
+            summary_op = tf.summary.merge_all()
+           
+            with tf.Session() as sess:
+                #saver.restore(sess,data_path)
+                writer = tf.summary.FileWriter(experiment_dir, sess.graph)
+                sess.run(tf.global_variables_initializer())
+                ge = 0
+                number_of_batches = 100
                 i = 0
-                j = 0
-                x = list(range(0,2700))
-                shuffle(x)
-                batch_size=1
-                while (i < (256/batch_size)*2700):
-                    jj = x[j]
-                    if MODEL=="vector":
-                        r = np.load("images_2/res_1000_" + str(jj) + ".npy")
-                        l = np.load("images_2/im_" + str(jj) + ".npy")
-                    elif MODEL=="classic":
-                        r = np.load("images_2/res_1000_" + str(jj) + ".npy")
-                        l = np.load("images_2/im_" + str(jj) + ".npy")
-                    elif MODEL=="qr":
-                        r = np.load("images_qr/res_1000_" + str(jj) + ".npy")
-                        l = np.load("images_qr/im_63_" + str(jj) + ".npy")
-                    
-                    x2 = list(range(0,int(256/batch_size)))
-                    shuffle(x2)
-                    for k in x2:
-                        if MODEL == "vector":
-                            rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
-                        elif MODEL == "classic":
-                            rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
-                        elif MODEL == "qr":
-                            rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
-                        lp = l[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
-                        _, loss_value, summary,output = sess.run(
-                            [train_op, loss, summary_op,out],
+                for _ in range(0,2):
+                    x = list(range(1,number_of_batches+1))
+                    shuffle(x)
+                    batch_size=1
+                    for ind in x:
+                        if MODEL=="vector":
+                            r = np.load("images_2/res_1000_" + str(ind) + ".npy")
+                            l = np.load("images_2/im_" + str(ind) + ".npy")
+                        elif MODEL=="classic":
+                            r = np.load("data_set/intensities_" + str(ind) + ".npy")
+                            l = np.load("data_set/im_" + str(ind) + ".npy")
+                            num = int(len(r[0,:,0])*percent)
+                            batch_res = np.zeros([num, 64, 64, 1], dtype="float32")
+                            for ip in range(0,256):
+                                batch_res[ip, :, :, 0]=process_data_set(percent,r[ip,:,0])
+                        elif MODEL=="qr":
+                            r = np.load("images_qr/res_1000_" + str(ind) + ".npy")
+                            l = np.load("images_qr/im_63_" + str(ind) + ".npy")
+                        
+                        x2 = list(range(0,int(256/batch_size)))
+                        shuffle(x2)
+                        for k in x2:
+                            if MODEL == "vector":
+                                rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                            elif MODEL == "classic":
+                                rp = batch_res[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                            elif MODEL == "qr":
+                                rp = r[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                            lp = l[(batch_size)*k:(batch_size)*k+batch_size,:,:,:]
+                            _, loss_value, summary,output = sess.run(
+                                [train_op, loss, summary_op,out],
+                                feed_dict={
+                                    r_input: rp,
+                                    labels: lp
+                                })
+                            if i % 255 == 0 and i != 0:
+                                writer.add_summary(summary, global_step=ge)
+                                saver.save(sess, experiment_dir + "model-"+str(percent)+"-" + str(i) + ".ckpt")
+                                print(i)
+                                print("LOSS:" + str(loss_value))
+                            ge = ge+1
+                            i = i + 1
+                global matrix_vector
+                global masks_vector
+                global Tmatrix_vector
+                del(matrix_vector)
+                del(masks_vector)
+                del(Tmatrix_vector)
+                sess.close()
+
+        elif MODE == "test":
+            os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+            data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\13-12-2017_13.05.05\\model-179850.ckpt"
+            
+            r_input = tf.placeholder(tf.float32, None)
+            labels = tf.placeholder(tf.float32, None)
+            out,loss = test_model(r_input, labels)
+            saver = tf.train.Saver()
+
+            if MODEL=="vector":
+                print(1)
+            elif MODEL == "classic":
+                print(2)
+            elif MODEL == "qr":
+                rT = np.load("images_qr/res_1000_" + str(0) + ".npy") 
+                lT = np.load("images_qr/im_63_" + str(0) + ".npy")
+                rpT = rT[0:10,:,:,:]
+                lpT = lT[0:10,:,:,:]
+
+                r = np.load("images_qr/res_1000_" + str(2800) + ".npy") 
+                l = np.load("images_qr/im_63_" + str(2800) + ".npy")
+                rp = r[0:255,:,:,:]
+                lp = l[0:255,:,:,:]
+            with tf.Session() as sess:
+        
+                saver.restore(sess,data_path)
+                outputT, loss_value, = sess.run(
+                            [out, loss],
+                            feed_dict={
+                                r_input: rpT,
+                                labels: lpT
+                            })
+                print(loss_value)
+                output, loss_value, = sess.run(
+                            [out, loss],
                             feed_dict={
                                 r_input: rp,
                                 labels: lp
                             })
-                        if i % 30 == 0 and i != 0:
-                            writer.add_summary(summary, global_step=ge)
-                            saver.save(sess, experiment_dir + "model-" + str(i) + ".ckpt")
-                            print("LOSS:" + str(loss_value))
-                        i = i + 1
-                        ge = ge+1
-                    j = j+1
-                
-                
-    elif MODE == "test":
-        os.environ['CUDA_VISIBLE_DEVICES'] = '0'
-        data_path = "C:\\Users\\eloy\\Desktop\\Code\\Python\\dp_one\\experiments\\13-12-2017_13.05.05\\model-179850.ckpt"
-        
-        r_input = tf.placeholder(tf.float32, None)
-        labels = tf.placeholder(tf.float32, None)
-        out,loss = test_model(r_input, labels)
-        saver = tf.train.Saver()
-
-        if MODEL=="vector":
-            print(1)
-        elif MODEL == "classic":
-            print(2)
-        elif MODEL == "qr":
-            rT = np.load("images_qr/res_1000_" + str(0) + ".npy") 
-            lT = np.load("images_qr/im_63_" + str(0) + ".npy")
-            rpT = rT[0:10,:,:,:]
-            lpT = lT[0:10,:,:,:]
-
-            r = np.load("images_qr/res_1000_" + str(2800) + ".npy") 
-            l = np.load("images_qr/im_63_" + str(2800) + ".npy")
-            rp = r[0:255,:,:,:]
-            lp = l[0:255,:,:,:]
-        with tf.Session() as sess:
+                print(loss_value)
+                plt.subplot(4,2,1)
+                plt.imshow(lpT[0,:,:,0],"gray")      
+                plt.subplot(4,2,2)
+                plt.imshow(outputT[0,:,:,0],"gray")
+                plt.subplot(4,2,3)           
+                plt.imshow(lp[1,:,:,0],"gray")
+                plt.subplot(4,2,4)      
+                plt.imshow(output[1,:,:,0],"gray")
+                plt.subplot(4,2,5)           
+                plt.imshow(lp[2,:,:,0],"gray")
+                plt.subplot(4,2,6)      
+                plt.imshow(output[2,:,:,0],"gray")
+                plt.subplot(4,2,7)           
+                plt.imshow(lp[10,:,:,0],"gray")
+                plt.subplot(4,2,8)      
+                plt.imshow(output[10,:,:,0],"gray")
+                plt.show()
     
-            saver.restore(sess,data_path)
-            outputT, loss_value, = sess.run(
-                        [out, loss],
-                        feed_dict={
-                            r_input: rpT,
-                            labels: lpT
-                        })
-            print(loss_value)
-            output, loss_value, = sess.run(
-                        [out, loss],
-                        feed_dict={
-                            r_input: rp,
-                            labels: lp
-                        })
-            print(loss_value)
-            plt.subplot(4,2,1)
-            plt.imshow(lpT[0,:,:,0],"gray")      
-            plt.subplot(4,2,2)
-            plt.imshow(outputT[0,:,:,0],"gray")
-            plt.subplot(4,2,3)           
-            plt.imshow(lp[1,:,:,0],"gray")
-            plt.subplot(4,2,4)      
-            plt.imshow(output[1,:,:,0],"gray")
-            plt.subplot(4,2,5)           
-            plt.imshow(lp[2,:,:,0],"gray")
-            plt.subplot(4,2,6)      
-            plt.imshow(output[2,:,:,0],"gray")
-            plt.subplot(4,2,7)           
-            plt.imshow(lp[10,:,:,0],"gray")
-            plt.subplot(4,2,8)      
-            plt.imshow(output[10,:,:,0],"gray")
-            plt.show()
-            
+
 def _tf_fspecial_gauss(size, sigma):
     """Function to mimic the 'fspecial' gaussian MATLAB function
     """
@@ -366,5 +376,29 @@ def psnr(target, ref, scale):
 	rmse = math.sqrt( np.mean(diff ** 2.) )
 	return 20*math.log10(1.0/rmse)
 
+
+
+def process_data_set(percent,intensity_vector):
+    global matrix_vector
+    global masks_vector
+    global Tmatrix_vector
+    num = int(len(intensity_vector)*percent)
+    intensity_vector= intensity_vector[:num]
+    try:
+        matrix_vector
+        masks_vector
+        Tmatrix_vector
+    except:
+        matrix_vector = []
+        masks_vector = []
+        np.random.seed(1)
+        for _ in range(0, num):
+            random_matrix = (np.random.rand(64, 64) < 0.5) * np.float32(1)
+            masks_vector.append(random_matrix)
+            matrix_vector.append(random_matrix.flatten())
+        Tmatrix_vector=np.linalg.pinv(np.matrix(matrix_vector))
+    result = np.reshape(
+                np.matmul(Tmatrix_vector,intensity_vector), (64, 64))
+    return result
 if __name__ == "__main__":
     tf.app.run()
