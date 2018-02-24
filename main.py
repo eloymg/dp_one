@@ -140,7 +140,7 @@ def train_model(features, labels):
     loss = 0.0001*tf.losses.mean_squared_error(labels, output) + 100*tf.abs(tf_ssim(labels, output)-1.0)
     
     global_step = tf.Variable(0, trainable=False)
-    learning_rate = tf.train.exponential_decay(0.00003,global_step,
+    learning_rate = tf.train.exponential_decay(0.001,global_step,
                                            1000, 0.96, staircase=True)
     optimizer = tf.train.AdamOptimizer(learning_rate)
     train_op = optimizer.minimize(
@@ -182,9 +182,9 @@ def main(argunused):
                 writer = tf.summary.FileWriter(experiment_dir, sess.graph)
                 sess.run(tf.global_variables_initializer())
                 ge = 0
-                number_of_batches = 100
+                number_of_batches = 1167
                 i = 0
-                for _ in range(0,2):
+                for _ in range(0,5):
                     x = list(range(1,number_of_batches+1))
                     shuffle(x)
                     batch_size=1

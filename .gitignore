@@ -1,6 +1,5 @@
 *.txt
 data_set/
-images_2/
-images_qr/
 experiments/
-tests/
+pesos(800)/
+pesos(1100)/
