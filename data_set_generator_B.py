@@ -10,21 +10,15 @@ ii=0
 def generate_batch(batch_size, fh):
     global ii
     batch_im = np.zeros([batch_size, 64, 64, 1], dtype="float32")
-    batch_res = np.zeros([batch_size, 64, 64, 1], dtype="float32")
-    batch_intensity = np.zeros([batch_size, 1000, 1], dtype="float32")
+    batch_intensity = np.zeros([batch_size, 64*64, 1], dtype="float32")
     try:
-        matrix_vector
         masks_vector
-        Tmatrix_vector
     except:
-        matrix_vector = []
         masks_vector = []
         np.random.seed(1)
-        for _ in range(0, 1000):
+        for _ in range(0, 64*64):
             random_matrix = (np.random.rand(64, 64) < 0.5) * np.float32(1)
             masks_vector.append(random_matrix)
-            matrix_vector.append(random_matrix.flatten())
-        Tmatrix_vector=np.linalg.pinv(np.matrix(matrix_vector))
     for i in range(0, batch_size):
         intensity_vector = []
         im = []
@@ -46,31 +40,26 @@ def generate_batch(batch_size, fh):
             for j in masks_vector:
                 intensity_vector.append(np.sum(j * im))
             im = im.astype('float32')
-            res = np.reshape(
-                np.matmul(Tmatrix_vector,intensity_vector), (64, 64))
             count += 1
         batch_im[i, :, :, 0] = im
         batch_im = batch_im.astype('float32')
-        batch_res[i, :, :, 0] = res
-        batch_res = batch_res.astype('float32')
         batch_intensity[i, :, 0] = intensity_vector
         batch_intensity = batch_intensity.astype('float32')
-    return batch_im, batch_res ,batch_intensity
+    return batch_im,batch_intensity
 
 
 #imagenet
 fh = open("fall11_urls.txt")
-for i in range(0,150000):
+for i in range(0,1):
     try:
         url = fh.readline()
     except:
         continue
-for i in range(272,4000):
-    im,res,intensity=generate_batch(256,fh)
+for i in range(1,4000):
+    im,intensity=generate_batch(256,fh)
     print(ii)
-    np.save("images_2/im_"+str(i), im)
-    np.save("images_2/res_1000_"+str(i), res)
-    #np.save("images_2/intensity_1000_"+str(i), intensity)
+    np.save("data_set/im_"+str(i), im)
+    np.save("data_set/intensities_"+str(i), intensity)
 """
 params = (
     ('method', 'flickr.photos.search'),

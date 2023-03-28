@@ -2,16 +2,20 @@ import requests
 from PIL import Image
 import numpy as np
 import scipy.misc
+import qrcode
 
 
 global matrix_vector
 global masks_vector
+
 ii=0
-def generate_batch(batch_size, fh):
-    global ii
-    batch_im = np.zeros([batch_size, 64, 64, 1], dtype="float32")
-    batch_res = np.zeros([batch_size, 64, 64, 1], dtype="float32")
-    batch_intensity = np.zeros([batch_size, 1000, 1], dtype="float32")
+subsampling = 1000
+
+def generate_batch(batch_size):
+    global ii 
+    batch_im = np.zeros([batch_size, 63, 63, 1], dtype="float32")
+    batch_res = np.zeros([batch_size, 63, 63, 1], dtype="float32")
+    batch_intensity = np.zeros([batch_size, subsampling, 1], dtype="float32")
     try:
         matrix_vector
         masks_vector
@@ -20,8 +24,8 @@ def generate_batch(batch_size, fh):
         matrix_vector = []
         masks_vector = []
         np.random.seed(1)
-        for _ in range(0, 1000):
-            random_matrix = (np.random.rand(64, 64) < 0.5) * np.float32(1)
+        for _ in range(0, subsampling):
+            random_matrix = (np.random.rand(63, 63) < 0.5) * np.float32(1)
             masks_vector.append(random_matrix)
             matrix_vector.append(random_matrix.flatten())
         Tmatrix_vector=np.linalg.pinv(np.matrix(matrix_vector))
@@ -32,13 +36,20 @@ def generate_batch(batch_size, fh):
         count = 0
         while len(im) == 0 and len(res) == 0:
             try:
-                url = fh.readline().split()[1]
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=3,
+                    border=0,
+                )
+                qr.add_data(ii)
                 ii=ii+1
-                im = np.asarray(
-                    Image.open(
-                        requests.get(url, stream=True, timeout=(0.5,0.5)).raw))
-                im = scipy.misc.imresize(im, (64, 64))[:, :, 0]
-                
+                img = qr.make_image()
+                im = np.array(img.getdata(),
+                    np.uint8).reshape(img.size[1], img.size[0])
+                im = np.asarray(im)*1
+                qr.clear()
+                print(i)
             except:
                 im = []
                 res = []
@@ -47,7 +58,7 @@ def generate_batch(batch_size, fh):
                 intensity_vector.append(np.sum(j * im))
             im = im.astype('float32')
             res = np.reshape(
-                np.matmul(Tmatrix_vector,intensity_vector), (64, 64))
+                np.matmul(Tmatrix_vector,intensity_vector), (63, 63))
             count += 1
         batch_im[i, :, :, 0] = im
         batch_im = batch_im.astype('float32')
@@ -57,19 +68,12 @@ def generate_batch(batch_size, fh):
         batch_intensity = batch_intensity.astype('float32')
     return batch_im, batch_res ,batch_intensity
 
+ii = 0
 
-#imagenet
-fh = open("fall11_urls.txt")
-for i in range(0,150000):
-    try:
-        url = fh.readline()
-    except:
-        continue
-for i in range(272,4000):
-    im,res,intensity=generate_batch(256,fh)
-    print(ii)
-    np.save("images_2/im_"+str(i), im)
-    np.save("images_2/res_1000_"+str(i), res)
+for i in range(0,4000):
+    im,res,intensity=generate_batch(256)
+    np.save("images_qr/im_63_"+str(i), im)
+    np.save("images_qr/res_"+str(subsampling)+"_"+str(i), res)
     #np.save("images_2/intensity_1000_"+str(i), intensity)
 """
 params = (

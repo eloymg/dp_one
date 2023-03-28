@@ -1,2 +1,5 @@
 *.txt
-images/
+data_set/
+experiments/
+pesos(800)/
+pesos(1100)/
